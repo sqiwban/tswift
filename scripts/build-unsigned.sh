@@ -45,7 +45,7 @@ app="DerivedData/Build/Products/$configuration-iphoneos/TSwift.app"
 test -d "$app"
 test ! -e "$app/embedded.mobileprovision"
 test ! -d "$app/_CodeSignature"
-xcrun lipo -verify_arch arm64 "$app/TSwift"
+xcrun lipo "$app/TSwift" -verify_arch arm64
 if codesign -d "$app" > build/codesign.txt 2>&1; then
   echo "Expected an unsigned app, but codesign found a signature." >&2
   exit 1
