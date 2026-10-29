@@ -1,0 +1,20 @@
+{
+  "project": "TSwift",
+  "platform": "ios",
+  "github": {
+    "owner": "sqiwban",
+    "repo": "tswift"
+  },
+  "provider": "github",
+  "ios": {
+    "path": ".",
+    "scheme": "TSwift",
+    "bundleId": "com.sqiwban.tswift",
+    "configuration": "Debug",
+    "signing": false
+  },
+  "mobai": {
+    "url": "http://localhost:8686",
+    "device_id": ""
+  }
+}

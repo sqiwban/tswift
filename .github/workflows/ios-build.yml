@@ -1,0 +1,142 @@
+# Native-only unsigned adaptation of MobAI-App/ios-builder v0.11.0.
+# Keep the workflow filename, run-name, dispatch inputs, snapshot handling,
+# and artifact name `ipa`: builder uses these to dispatch and download.
+name: iOS Build
+run-name: iOS Build ${{ inputs.build_id || github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'ios-build/*'
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: Unique build identifier
+        required: true
+        type: string
+      snapshot_ref:
+        description: Working-tree snapshot ref; empty builds the selected branch
+        type: string
+        default: ''
+      ios_path:
+        description: Project directory; this project requires the repository root
+        type: string
+        default: '.'
+      scheme:
+        description: Shared scheme
+        type: string
+        default: TSwift
+      use_signing:
+        description: Must remain false; signing is performed locally in MobAI
+        type: boolean
+        default: false
+      configuration:
+        description: Debug or Release
+        type: string
+        default: Debug
+      flutter_version:
+        description: Reserved for ios-builder compatibility; unused
+        type: string
+        default: ''
+      jdk_version:
+        description: Reserved for ios-builder compatibility; unused
+        type: string
+        default: '17'
+      profile:
+        description: Reserved for ios-builder compatibility; only an empty profile is accepted
+        type: string
+        default: '{}'
+      build_number:
+        description: Reserved for ios-builder compatibility; leave empty
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write # Delete the ios-build/* trigger tag, as upstream does.
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Checkout working-tree snapshot
+        if: inputs.snapshot_ref != ''
+        env:
+          SNAPSHOT_REF: ${{ inputs.snapshot_ref }}
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "+$SNAPSHOT_REF:refs/heads/snapshot"
+          git checkout --force snapshot
+
+      - name: Resolve and validate unsigned build parameters
+        env:
+          IN_BUILD_ID: ${{ inputs.build_id }}
+          IN_IOS_PATH: ${{ inputs.ios_path }}
+          IN_SCHEME: ${{ inputs.scheme }}
+          IN_SIGNING: ${{ inputs.use_signing }}
+          IN_CONFIGURATION: ${{ inputs.configuration }}
+          IN_PROFILE: ${{ inputs.profile }}
+          IN_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            test "$IN_SIGNING" != true
+            test -z "$IN_BUILD_NUMBER"
+            jq -e '. == {}' <<< "$IN_PROFILE" > /dev/null
+            test "$IN_IOS_PATH" = .
+            test "${IN_SCHEME:-TSwift}" = TSwift
+            build_id="$IN_BUILD_ID"
+            configuration="$IN_CONFIGURATION"
+          else
+            build_id="${GITHUB_REF_NAME##*/}"
+            configuration=$(jq -r '.ios.configuration // "Debug"' builder.json)
+          fi
+          jq -e '
+            .ios.path == "." and .ios.scheme == "TSwift" and
+            .ios.bundleId == "com.sqiwban.tswift" and
+            .ios.signing == false and
+            (.defaultProfile // "") == "" and
+            (.profiles // {}) == {}
+          ' builder.json > /dev/null
+          [[ "$build_id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]]
+          case "$configuration" in Debug|Release) ;; *) exit 1 ;; esac
+          echo "BUILD_ID=$build_id" >> "$GITHUB_ENV"
+          echo "CONFIGURATION=$configuration" >> "$GITHUB_ENV"
+
+      - name: Generate shared Xcode project with XcodeGen 2.46.0
+        run: bash scripts/generate-project.sh
+
+      - name: Build and verify unsigned iPhone IPA
+        run: bash scripts/build-unsigned.sh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ipa
+          path: build/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload project and build diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: build-diagnostics
+          path: |
+            TSwift.xcodeproj
+            build/*.txt
+            build/*.json
+            build/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Delete trigger tag
+        if: always() && github.ref_type == 'tag'
+        run: git push origin ":refs/tags/$GITHUB_REF_NAME"

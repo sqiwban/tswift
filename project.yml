@@ -1,0 +1,47 @@
+name: TSwift
+options:
+  minimumXcodeGenVersion: 2.46.0
+  xcodeVersion: "26.3"
+  deploymentTarget:
+    iOS: "16.0"
+  developmentLanguage: ru
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
+targets:
+  TSwift:
+    type: application
+    platform: iOS
+    sources:
+      - path: TSwift
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sqiwban.tswift
+        INFOPLIST_FILE: TSwift/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+schemes:
+  TSwift:
+    management:
+      shared: true
+    build:
+      targets:
+        TSwift: all
+    run:
+      config: Debug
+    archive:
+      config: Release
